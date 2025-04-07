@@ -13,10 +13,10 @@ def is_admin():
         return False
 
 if not is_admin():
-    st.warning("Please run Streamlit as Administrator for full functionality.")
+    st.warning("⚠️ Please run this app as Administrator for full functionality (e.g., disk check, shadow copy access).")
     st.stop()
 
-# ---------- Functions ----------
+# ---------- Functionalities ----------
 def list_files():
     directory = "D:\\CODE\\OS_project"
     if not os.path.exists(directory):
@@ -53,7 +53,7 @@ def recover_files(drive, file_name):
         shadow_copy_path = os.popen(cmd).read().strip()
         
         if not shadow_copy_path:
-            st.error("No Shadow Copies found.")
+            st.error("❌ No Shadow Copies found.")
             return
 
         shadow_copy_path = shadow_copy_path.replace("\\??\\", "")
@@ -71,9 +71,9 @@ def recover_files(drive, file_name):
 
         if result == 0:
             os.system(f'attrib -h -s "{recovered_path}"')
-            st.success(f"✅ File recovered to:\n{recovered_path}")
+            st.success(f"✅ File recovered to: {recovered_path}")
         else:
-            st.error("❌ File recovery failed. It might not exist in shadow copies.")
+            st.error("❌ File recovery failed. It may not exist in shadow copies.")
     except Exception as e:
         st.error(f"Recovery failed: {str(e)}")
 
@@ -93,7 +93,7 @@ def check_disk(drive):
 def optimize_disk(drive):
     try:
         os.system(f"defrag {drive}: /U /V")
-        st.success("🚀 Disk Optimized Successfully!")
+        st.success("🚀 Disk optimized successfully!")
     except Exception as e:
         st.error(f"Error: {e}")
 
@@ -104,15 +104,14 @@ def delete_file(file_path):
     except Exception as e:
         st.error(f"Could not delete file:\n{e}")
 
-# ---------- Streamlit UI ----------
+# ---------- UI ----------
 st.set_page_config(page_title="File System Recovery & Optimization", layout="centered")
-st.title("💾 File System Recovery & Optimization")
+st.title("💾 File System Recovery & Optimization Tool")
 
-# Navigation
-option = st.sidebar.selectbox("Choose Operation", [
+option = st.sidebar.selectbox("Select Task", [
     "📂 List Files",
     "🗑️ List Deleted Files",
-    "🔄 Recover File",
+    "🔄 Recover Deleted File",
     "🛠️ Check Disk",
     "🚀 Optimize Disk",
     "❌ Delete File"
@@ -123,4 +122,27 @@ if option == "📂 List Files":
         list_files()
 
 elif option == "🗑️ List Deleted Files":
-    drive = st.text_input("_
+    drive = st.text_input("Enter Drive Letter (e.g., C)")
+    if st.button("Show Deleted Files") and drive:
+        list_deleted_files(drive)
+
+elif option == "🔄 Recover Deleted File":
+    drive = st.text_input("Enter Drive Letter (e.g., C)")
+    file_name = st.text_input("Enter Full Deleted File Path (e.g., \\Users\\Name\\file.txt)")
+    if st.button("Recover File") and drive and file_name:
+        recover_files(drive, file_name)
+
+elif option == "🛠️ Check Disk":
+    drive = st.text_input("Enter Drive Letter (e.g., C)")
+    if st.button("Check Disk") and drive:
+        check_disk(drive)
+
+elif option == "🚀 Optimize Disk":
+    drive = st.text_input("Enter Drive Letter (e.g., C)")
+    if st.button("Optimize Disk") and drive:
+        optimize_disk(drive)
+
+elif option == "❌ Delete File":
+    file_path = st.text_input("Enter Full Path of File to Delete")
+    if st.button("Delete File") and file_path:
+        delete_file(file_path)
