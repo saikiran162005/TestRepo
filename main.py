@@ -1,11 +1,13 @@
-import os
 import streamlit as st
-import ctypes
-import sys
+import os
 import subprocess
 import datetime
+import ctypes
 
-# ---------- Admin Check ----------
+st.set_page_config(page_title="File Recovery & Optimization", layout="centered")
+st.title("💾 File System Recovery & Optimization (Streamlit)")
+
+# ---------------------- Admin Check ----------------------
 def is_admin():
     try:
         return ctypes.windll.shell32.IsUserAnAdmin()
@@ -13,19 +15,22 @@ def is_admin():
         return False
 
 if not is_admin():
-    st.warning("⚠️ Please run this app as Administrator for full functionality (e.g., disk check, shadow copy access).")
+    st.warning("⚠️ This app must be run as Administrator to access system-level features like Recycle Bin or Shadow Copy.")
     st.stop()
 
-# ---------- Functionalities ----------
-def list_files():
-    directory = "D:\\CODE\\OS_project"
+# ---------------------- Core Functions ----------------------
+
+def list_files(directory):
     if not os.path.exists(directory):
-        st.error(f"Directory not found: {directory}")
-    else:
-        files = os.listdir(directory)
+        st.error(f"❌ Directory not found: {directory}")
+        return
+    files = os.listdir(directory)
+    if files:
         st.success(f"📂 Files in {directory}:")
-        for f in files:
-            st.write(f"📄 {f}")
+        for file in files:
+            st.write(f"📄 {file}")
+    else:
+        st.info("The folder is empty.")
 
 def list_deleted_files(drive):
     try:
@@ -35,114 +40,103 @@ def list_deleted_files(drive):
             '| Select-Object FullName | Format-List"'
         )
         output = os.popen(cmd).read().strip()
-
-        if not output:
-            st.info("🗑️ No deleted files found.")
-        else:
+        if output:
             st.code(output, language='powershell')
+        else:
+            st.info("🗑️ No deleted files found.")
     except Exception as e:
-        st.error(f"Error: {str(e)}")
+        st.error(str(e))
 
-def recover_files(drive, file_name):
+def recover_file(drive, deleted_file_path):
     try:
         cmd = (
             'powershell -Command "(Get-WmiObject -Class Win32_ShadowCopy | '
             'Sort-Object -Property InstallDate -Descending | '
             'Select-Object -First 1).DeviceObject"'
         )
-        shadow_copy_path = os.popen(cmd).read().strip()
-        
+        shadow_copy_path = os.popen(cmd).read().strip().replace("\\??\\", "")
         if not shadow_copy_path:
             st.error("❌ No Shadow Copies found.")
             return
 
-        shadow_copy_path = shadow_copy_path.replace("\\??\\", "")
-        source_path = f"{shadow_copy_path}{file_name}"
-
+        full_source = f"{shadow_copy_path}{deleted_file_path}"
         recovery_dir = os.path.join(f"{drive}:\\", "Recovered_Files")
         os.makedirs(recovery_dir, exist_ok=True)
-
-        base_name = os.path.basename(file_name)
+        base = os.path.basename(deleted_file_path)
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        recovered_path = os.path.join(recovery_dir, f"recovered_{timestamp}_{base_name}")
+        dest = os.path.join(recovery_dir, f"recovered_{timestamp}_{base}")
 
-        copy_cmd = f'powershell -Command "Copy-Item -Path \'{source_path}\' -Destination \'{recovered_path}\'"'
+        copy_cmd = f'powershell -Command "Copy-Item -Path \'{full_source}\' -Destination \'{dest}\'"'
         result = os.system(copy_cmd)
 
         if result == 0:
-            os.system(f'attrib -h -s "{recovered_path}"')
-            st.success(f"✅ File recovered to: {recovered_path}")
+            os.system(f'attrib -h -s "{dest}"')
+            st.success(f"✅ Recovered to: {dest}")
         else:
-            st.error("❌ File recovery failed. It may not exist in shadow copies.")
+            st.error("❌ Recovery failed. File may not exist in Shadow Copy.")
     except Exception as e:
-        st.error(f"Recovery failed: {str(e)}")
+        st.error(str(e))
 
 def check_disk(drive):
     try:
-        process = subprocess.Popen(
-            ["chkdsk", f"{drive}:"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
+        process = subprocess.Popen(["chkdsk", f"{drive}:"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         output, error = process.communicate()
         st.code(output if output else error, language='bash')
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(str(e))
 
 def optimize_disk(drive):
     try:
         os.system(f"defrag {drive}: /U /V")
-        st.success("🚀 Disk optimized successfully!")
+        st.success("🚀 Disk optimized.")
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(str(e))
 
-def delete_file(file_path):
+def delete_file(path):
     try:
-        os.remove(file_path)
-        st.success(f"🗑️ Deleted: {file_path}")
+        os.remove(path)
+        st.success(f"🗑️ Deleted: {path}")
     except Exception as e:
-        st.error(f"Could not delete file:\n{e}")
+        st.error(str(e))
 
-# ---------- UI ----------
-st.set_page_config(page_title="File System Recovery & Optimization", layout="centered")
-st.title("💾 File System Recovery & Optimization Tool")
-
-option = st.sidebar.selectbox("Select Task", [
+# ---------------------- Sidebar Menu ----------------------
+option = st.sidebar.selectbox("Select Action", [
     "📂 List Files",
     "🗑️ List Deleted Files",
-    "🔄 Recover Deleted File",
+    "🔄 Recover File",
     "🛠️ Check Disk",
     "🚀 Optimize Disk",
     "❌ Delete File"
 ])
 
+# ---------------------- UI Panels ----------------------
 if option == "📂 List Files":
+    directory = st.text_input("Enter directory path", "D:\\CODE\\OS_project")
     if st.button("List Files"):
-        list_files()
+        list_files(directory)
 
 elif option == "🗑️ List Deleted Files":
-    drive = st.text_input("Enter Drive Letter (e.g., C)")
+    drive = st.text_input("Drive letter (e.g., C)")
     if st.button("Show Deleted Files") and drive:
         list_deleted_files(drive)
 
-elif option == "🔄 Recover Deleted File":
-    drive = st.text_input("Enter Drive Letter (e.g., C)")
-    file_name = st.text_input("Enter Full Deleted File Path (e.g., \\Users\\Name\\file.txt)")
-    if st.button("Recover File") and drive and file_name:
-        recover_files(drive, file_name)
+elif option == "🔄 Recover File":
+    drive = st.text_input("Drive letter (e.g., C)")
+    file_path = st.text_input("Path to deleted file (e.g., \\Users\\John\\Documents\\file.txt)")
+    if st.button("Recover") and drive and file_path:
+        recover_file(drive, file_path)
 
 elif option == "🛠️ Check Disk":
-    drive = st.text_input("Enter Drive Letter (e.g., C)")
-    if st.button("Check Disk") and drive:
+    drive = st.text_input("Drive letter (e.g., C)")
+    if st.button("Run CHKDSK") and drive:
         check_disk(drive)
 
 elif option == "🚀 Optimize Disk":
-    drive = st.text_input("Enter Drive Letter (e.g., C)")
-    if st.button("Optimize Disk") and drive:
+    drive = st.text_input("Drive letter (e.g., C)")
+    if st.button("Defragment") and drive:
         optimize_disk(drive)
 
 elif option == "❌ Delete File":
-    file_path = st.text_input("Enter Full Path of File to Delete")
+    file_path = st.text_input("Full path to file you want to delete")
     if st.button("Delete File") and file_path:
         delete_file(file_path)
